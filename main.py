@@ -18,7 +18,7 @@ def update_homework_question_duration_writinrg_duration(hive_conn, mysql_conn, g
     for row in result:
         sql = "UPDATE `homework_question_duration_%d%d` SET `writing_duration` = %f WHERE module = '%s' AND unit = '%s' AND question_id='%s' AND pen_name = '%s'" %(grade_no, class_no, row[4], row[0], row[1], row[2], row[3])
         mysql_conn.update(sql)
-        mysql_conn.commit()
+    mysql_conn.commit()
 
 def update_homework_question_duration_break_duration(hive_conn, mysql_conn, grade_no, class_no):
      # 计算每道题中，笔划停顿总时长(ms)：笔划与笔划之间停顿的总时长
@@ -28,7 +28,7 @@ def update_homework_question_duration_break_duration(hive_conn, mysql_conn, grad
     for row in result:
         sql = "UPDATE `homework_question_duration_%d%d` SET `break_duration` = %f WHERE module = '%s' AND unit = '%s' AND question_id='%s' AND pen_name = '%s'" %(grade_no, class_no, row[4], row[0], row[1], row[2], row[3])
         mysql_conn.update(sql)
-        mysql_conn.commit()
+    mysql_conn.commit()
 
 def update_homework_question_duration_start_end_time(hive_conn, mysql_conn, grade_no, class_no):
     hql = "SELECT Module, Unit, questionId, pen_name, max(create_time) as end_time, min(create_time) as start_time FROM test_point_yw_%d%d GROUP BY Module, Unit, questionId, pen_name ORDER BY Module, Unit, questionId, pen_name" %(grade_no, class_no)
@@ -36,7 +36,7 @@ def update_homework_question_duration_start_end_time(hive_conn, mysql_conn, grad
     for row in result:
         sql = "UPDATE `homework_question_duration_%d%d` SET `end_time` = '%s', `start_time` = '%s' WHERE `module` = '%s' AND `unit` = '%s' AND `question_id`='%s' AND `pen_name` = '%s'" %(grade_no, class_no, row[4], row[5], row[0], row[1], row[2], row[3])
         mysql_conn.update(sql)
-        mysql_conn.commit()
+    mysql_conn.commit()
 
 def insert_homework_stroke_duration(hive_conn, mysql_conn, grade_no, class_no):
     hql = "SELECT Module, Unit, questionId, pen_name, stroke_num, min(ts), max(ts), max(ts)-min(ts),  min(point_psr), max(point_psr), avg(point_psr), stddev(point_psr) FROM test_point_yw_%d%d GROUP BY Module, Unit, questionId, pen_name, stroke_num" %(grade_no, class_no)
@@ -47,12 +47,36 @@ def insert_homework_stroke_duration(hive_conn, mysql_conn, grade_no, class_no):
     mysql_conn.commit()
 
 
+def update_homework_question_duration_student_info(hive_conn, mysql_conn, grade_no, class_no):
+    dest_table_name = "homework_question_duration_%d%d" %(grade_no, class_no)
+    sql_update_student_id_name = "UPDATE `%s` SET `student_id` = (SELECT `person_id` FROM student_info WHERE student_info.pen_id = `%s`.pen_name), `student_name` = (SELECT `user_name` FROM student_info WHERE student_info.pen_id = `%s`.pen_name);" %(dest_table_name, dest_table_name, dest_table_name)
+    mysql_conn.update(sql_update_student_id_name)
+    mysql_conn.commit()
+    print("=================================")
+    sql_update_knowledge_point = "UPDATE `%s` SET `%s`.knowledge_point = (SELECT a.knowledge_point FROM (SELECT Module, Unit, questionId, knowledge_point FROM test_point_yw_%d%d WHERE Module <> \"\" GROUP BY Module, Unit, questionId, knowledge_point) as a WHERE `%s`.module = a.Module and `%s`.unit = a.Unit and `%s`.question_id = a.questionId)" %(dest_table_name, dest_table_name, grade_no, class_no, dest_table_name, dest_table_name, dest_table_name)
+    mysql_conn.update(sql_update_knowledge_point)
+    mysql_conn.commit()
+    print("=================================")
+
+
+def update_homework_stroke_duration_student_info(hive_conn, mysql_conn, grade_no, class_no):
+    dest_table_name = "homework_stroke_duration_%d%d" %(grade_no, class_no)
+    sql_update_student_id_name = "UPDATE `%s` SET `student_id` = (SELECT `person_id` FROM student_info WHERE student_info.pen_id = `%s`.pen_name), `student_name` = (SELECT `user_name` FROM student_info WHERE student_info.pen_id = `%s`.pen_name);" %(dest_table_name, dest_table_name, dest_table_name)
+    mysql_conn.update(sql_update_student_id_name)
+    mysql_conn.commit()
+    print("=================================")
+    sql_update_knowledge_point = "UPDATE `%s` SET `%s`.knowledge_point = (SELECT a.knowledge_point FROM (SELECT Module, Unit, questionId, knowledge_point FROM test_point_yw_%d%d WHERE Module <> \"\" GROUP BY Module, Unit, questionId, knowledge_point) as a WHERE `%s`.module = a.Module and `%s`.unit = a.Unit and `%s`.question_id = a.questionId)" %(dest_table_name, dest_table_name, grade_no, class_no, dest_table_name, dest_table_name, dest_table_name)
+    mysql_conn.update(sql_update_knowledge_point)
+    mysql_conn.commit()
+    print("=================================")
+
+
 if __name__ == "__main__":
     hive_conn = HiveConnector("192.168.2.131")
     hive_conn.connect("nbys")
     mysql_conn = MysqlConnector("192.168.2.1", 3306, "root", "123456", "nbys_bi")
     grade_no = 3
-    class_no = 6
+    class_no = 8
     try:
         print("homework_question_duration表初始化...")
         inser_homework_question_duration(hive_conn, mysql_conn, grade_no, class_no)
@@ -65,6 +89,11 @@ if __name__ == "__main__":
         print("homework_question_duration表 start/end time 更新成功")
         insert_homework_stroke_duration(hive_conn, mysql_conn, grade_no, class_no)
         print("插入homework_stroke_duration表成功")
+        update_homework_question_duration_student_info(hive_conn, mysql_conn, grade_no, class_no)
+        print("更新homework_question_duration表的学生姓名、学号、知识点信息成功")
+        update_homework_stroke_duration_student_info(hive_conn, mysql_conn, grade_no, class_no)
+        print("更新homework_stroke_duration表的学生姓名、学号、知识点信息成功")
+        print("Completed successfully!")
         # hql = "SELECT Module, Unit, questionId, pen_name, stroke_num, min(ts), max(ts), max(ts)-min(ts),  min(point_psr), max(point_psr), avg(point_psr), stddev(point_psr) FROM test_point_yw GROUP BY Module, Unit, questionId, pen_name, stroke_num"
         # result = hive_conn.execte(hql)
         # print(len(result))
